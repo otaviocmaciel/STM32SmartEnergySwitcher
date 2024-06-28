@@ -17,3 +17,7 @@ Firstly, for the development, I chose to start by designing the entire circuit f
 ![diagram](https://github.com/otaviocmaciel/STM32SmartEnergySwitcher/assets/93693421/00c0f741-25c3-4d56-82b5-7dd8ba0937c4)
 
 I used some diodes in the tests I conducted; however, I considered using Schottky diodes due to their junction, which results in a lower forward voltage drop. This allows me not to worry about the dead time between the voltage levels of +0.7V and -0.7V caused by the PN junction of silicon diodes, as in the case of the 1N60P, we have a Metal-N junction. The stage following to retifier has maximum current arround to 300uA, because the Peak Voltage in the output of retifier is arround to 12*sqrt(2) and the voltage divisor have 57kΩ.
+
+1N60P:
+
+![chrome_b9aTRNprm0](https://github.com/otaviocmaciel/STM32SmartEnergySwitcher/assets/93693421/6bddd397-fda7-41da-96fb-95e096b144c5)
