@@ -21,3 +21,16 @@ I used some diodes in the tests I conducted; however, I considered using Schottk
 1N60P:
 
 ![chrome_b9aTRNprm0](https://github.com/otaviocmaciel/STM32SmartEnergySwitcher/assets/93693421/6bddd397-fda7-41da-96fb-95e096b144c5)
+
+## Development Roadmap
+
+1. DMA for acquiring data from the ADC
+  * Calculations to analyze if the electrical grid is in good health
+  * Development of the Analysis for Other Energy Sources (DC)
+
+2. Analysis of voltage levels from both the solar panel and the batteries
+  * The analysis includes monitoring the discharge of the stationary battery to limit the depth of discharge
+  * Selection of the Energy Source Based on a User-Configured Usage Profile
+
+3. Initially, the profile will be fixed; however, it is within the scope to implement a dynamic profile definition
+  * Profile configuration through the native USB port of the STM32 with a PC
