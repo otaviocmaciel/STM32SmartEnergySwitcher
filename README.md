@@ -12,7 +12,7 @@ For this project, an STM32F302 microcontroller was used, a mixed-signal MCU with
 
 ## Development
 
-Firstly, for the development, I chose to start by designing the entire circuit for analyzing the 220V AC grid. I believe this energy source will require the most hardware to condition the signal so that the MCU's ADC can read it accurately. The path followed by the electrical grid signal is illustrated below::
+Firstly, for the development, I chose to start by designing the entire circuit for analyzing the 220V AC grid. I believe this energy source will require the most hardware to condition the signal so that the MCU's ADC can read it accurately. The path followed by the electrical grid signal is illustrated below:
 
 ![diagram](https://github.com/otaviocmaciel/STM32SmartEnergySwitcher/assets/93693421/00c0f741-25c3-4d56-82b5-7dd8ba0937c4)
 
