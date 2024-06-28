@@ -2,7 +2,7 @@
 ## Description
 This project is being developed for the course "Topics in Electronic Engineering 4" as part of the curriculum for the Electronic Engineering program at the Federal Rural University of Pernambuco (UFRPE), Academic Unit of Cabo de Santo Agostinho (UACSA).
 
-The project consists of analyzing different energy sources to protect the connected load and aims to reduce the cost of energy utilization. The project should be capable of analyzing three different energy sources:
+The project consists of analyzing different energy sources to protect the connected load and aims to reduce the cost of energy utilization. The project should be capable of analyzing three different energy sources and define which will be used:
 
 * AC energy source (220V) from the utility company.
 * Energy stored in stationary batteries.
