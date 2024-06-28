@@ -4,7 +4,7 @@ This project is being developed for the course "Topics in Electronic Engineering
 
 The project consists of analyzing different energy sources to protect the connected load and aims to reduce the cost of energy utilization. The project should be capable of analyzing three different energy sources and define which will be used:
 
-* AC energy source (220V) from the utility company.
+* AC energy source (220V AC).
 * Energy stored in stationary batteries.
 * Energy from solar panels.
 
