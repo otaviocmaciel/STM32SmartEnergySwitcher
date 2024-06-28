@@ -8,4 +8,4 @@ The project consists of analyzing different energy sources to protect the connec
 * Energy stored in stationary batteries.
 * Energy from solar panels.
 
-For this project, an STM32F302 microcontroller was used, a mixed-signal MCU with an Arm® Cortex®-M4 core (with FPU and DSP instructions) running at 72 MHz. The choice of this MCU was based on the peripherals it offers, especially the analog peripherals.
+For this project, an STM32F302 microcontroller was used, a mixed-signal MCU with an Arm® Cortex®-M4 core (with FPU and DSP instructions) running at 72 MHz (used 48 MHz, I will explain more ahead why I choose this frequency). The choice of this MCU was based on the peripherals it offers, especially the analog peripherals.
