@@ -46,17 +46,43 @@ DMA_HandleTypeDef hdma_adc1;
 OPAMP_HandleTypeDef hopamp2;
 
 TIM_HandleTypeDef htim1;
+TIM_HandleTypeDef htim2;
 
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
-#define LEN_BUFFER 1000 //2100
+typedef enum {ACSINE_CHK, BAT_CHK, PANEL_CHK}StateMachine_CHECK;
+StateMachine_CHECK State_CHECK;
+
+#define LEN_BUFFER 1000
 volatile uint16_t adcBuffer[LEN_BUFFER];
-//volatile uint16_t adcBufferCopy[LEN_BUFFER];
-uint16_t dacBufferH = 0x100;
-uint16_t dacBufferL = 0x100;
-volatile uint8_t teste =0;
-volatile uint16_t Index_Buffer = 0;
+volatile int BATBuffer, PANELBuffer;
+volatile uint8_t DMA_FLAG;
+volatile uint8_t CONV_START;
+volatile uint16_t VMAX;
+volatile uint8_t REG_STATUS = 0x0;
+int ACSINE_VMIN = 3350;
+int ACSINE_VMAX = 3860;
+int BAT_VMIN = 2000;
+int PANEL_VMIN = 2500;
+
+typedef enum{AC, BAT, PANEL, NC}StateMachine_POWER;
+StateMachine_POWER State_POWER = NC;
+
+typedef enum{PRESET_1, PRESET_2, PRESET_3, PRESET_4, PRESET_5, PRESET_6}StateMachine_PRESET;
+StateMachine_PRESET State_PRESET;
+#define AC_AVAILABLE     (REG_STATUS & (1 << 0))  // Verifica se o bit 0 indica AC disponível
+#define BAT_AVAILABLE    (REG_STATUS & (1 << 1))  // Verifica se o bit 1 indica Bateria disponível
+#define PANEL_AVAILABLE  (REG_STATUS & (1 << 2))  // Verifica se o bit 2 indica Painel disponível
+
+volatile int SW_Time;
+
+typedef enum{IDLE, DBC, PRES}StateMachine_BUTTON;
+StateMachine_BUTTON State_BUTTON;
+#define READ_BUTTON (GPIOC->IDR &(1 << 13))
+volatile uint8_t BUTTON_Time;
+uint8_t POWER_Control;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -67,6 +93,7 @@ static void MX_USART2_UART_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_OPAMP2_Init(void);
+static void MX_TIM2_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -74,12 +101,31 @@ static void MX_OPAMP2_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-volatile uint16_t index_buffer = 0;
-uint8_t rxBuffer[3];
-char uartBuffer[10000];
-int length = 0;
+//volatile uint16_t index_buffer = 0;
+char rxBuffer[50];
+//char uartBuffer[10000];
+//int length = 0;
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart);
+int preset;
+int vmin_ac, vmax_ac, vmin_bat;
+int dados;
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
+	if (huart->Instance == USART2) {
+		// Usa sscanf para extrair os dados formatados da string
+		  dados = sscanf(rxBuffer, "%d-%d-%d-%d", &preset, &vmin_ac, &vmax_ac, &vmin_bat);
+		  if(dados == 4){
+			  State_PRESET = preset;
+			  ACSINE_VMIN = vmin_ac;
+			  ACSINE_VMAX = vmax_ac;
+			  BAT_VMIN = vmin_bat;
+		  }
+		// Agora as variáveis preset, vmin_ac, vmax_ac e vmin_bat contêm os valores
+		// Reinicia a recepção de 3 bytes pela UART em modo de interrupção
+		}
+		HAL_UART_Receive_IT(&huart2, rxBuffer, 19);
+	}
 
+/*
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
     if (huart->Instance == USART2) {
         if (rxBuffer[0] == '#' && rxBuffer[1] == 'B' && rxBuffer[2] == '.') {
@@ -97,7 +143,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
         HAL_UART_Receive_IT(&huart2, rxBuffer, 3);
     }
 }
-
+*/
 /* USER CODE END 0 */
 
 /**
@@ -133,32 +179,243 @@ int main(void)
   MX_ADC1_Init();
   MX_TIM1_Init();
   MX_OPAMP2_Init();
+  MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
   HAL_TIM_Base_Start(&htim1);
-  //TIM1->DIER |= (1 << 0);
-  //TIM1->CR1 |= (1 << 2);
-  HAL_ADC_Start_DMA (&hadc1, (uint32_t*)adcBuffer, LEN_BUFFER); // Inicia o DMA.
   HAL_OPAMP_Start(&hopamp2);
-  HAL_UART_Receive_IT(&huart2, rxBuffer, 3);
-  //NVIC_EnableIRQ(TIM1_UP_TIM16_IRQn);
-  //COMP2->CSR |= (1 << 16) | (1 << 17);
-  //EXTI->IMR = (1<<22); //Enabling channel 22 which is the COMP2 output
- // NVIC_EnableIRQ(COMP2_IRQn); // Enabling COMP2 interrupt
+  HAL_ADC_Start_DMA (&hadc1, (uint32_t*)adcBuffer, LEN_BUFFER); // Inicia o DMA.
+  HAL_UART_Receive_IT(&huart2, rxBuffer, 19);
+  GPIOB->MODER |= (0b11 << 28);
+  GPIOA->MODER |= (0b11 << 14);
+
+  GPIOA->ODR |= (1 << 10); // Configura os pinos como 1
+  GPIOB->ODR |= (1 << 3);  //pois estao em dreno aberto
+  GPIOB->ODR |= (1 << 5);
+  GPIOA->OSPEEDR |= (0b11 << 20); // PA10 em 50MHz
+  GPIOA->MODER |= (1 << 20); // PA10 como saida
+  GPIOA->OTYPER |= (1 << 10); // PA10 Dreno Aberto
+
+  GPIOB->OSPEEDR |= (0b11 << 6); // PB3 em 50MHz
+  GPIOB->MODER &= ~(1 << 7);
+  GPIOB->MODER |= (1 << 6); // PB3 como saida
+  GPIOB->OTYPER |= (1 << 3); // PB3 dreno aberto
+
+  GPIOB->OSPEEDR |= (0b11 << 10); //PB5 em 50MHz
+  GPIOB->MODER |= (1 << 10); // PB5 como saida
+  GPIOB->OTYPER |= (1 << 5); // PB5 Dreno Aberto
+
+  GPIOB->OSPEEDR |= (0b11 << 26); // Configura a saida do LED
+  GPIOB->MODER |= (1 << 26); // Coloca saida como Push-Pull
+
+  GPIOC->MODER &= ~(0b11 << 26);
+  GPIOC->PUPDR &= ~(0b11 << 26);
+  GPIOC->PUPDR |= (1 << 26);
+  GPIOC->ODR |= (1 << 13);
+
+  HAL_TIM_Base_Start(&htim2);
+  NVIC_EnableIRQ(TIM2_IRQn);
+  TIM2->DIER |= (1 << 0);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  //HAL_DAC_SetValue(&hdac, DAC_CHANNEL_1, DAC_ALIGN_12B_R, dacBuffer);
-	  /*
-	  for (int i = 0; i < LEN_BUFFER; i++) {
-		  length += sprintf(&uartBuffer[length], "%d\r\n", adcBuffer[i]);
+	  /* Pagina 438 Datasheet
+	   * Entradas do VIP do OPAMP2:
+	   * PB0 (VP2 -> 10) - Entrada AC
+	   * PA7 (VP0 -> 11) - Entrada Bateria
+	   * PB14 (VP3-> 01) - Entrada Painel
+	   * Configuração do OPAMP2 feita pelo: OPAMP2_CSR
+	   */
+	  switch(State_CHECK){
+	  case ACSINE_CHK: // PB0 (VP2 -> 10) - Entrada AC
+		  if(CONV_START){
+			  CONV_START = 0;
+			  OPAMP2->CSR |= (1 << 3);
+			  OPAMP2->CSR &= ~(1 << 2);
+			  DMA_FLAG=0;
+			  HAL_ADC_Start_DMA(&hadc1, (uint32_t*)adcBuffer, LEN_BUFFER); // Inicia uma nova amostragem
+		  }
+		  if(DMA_FLAG==2){ // O FLAG de controle deve ser igual a 2 porque a ISR é chamada na metade e no fim do buffer.
+			  DMA_FLAG = 0;
+			  //VMAX=0;
+			  int VMAX_temp = 0;
+			  for(int x = 0; x < LEN_BUFFER; x++){
+				  if(VMAX_temp < adcBuffer[x]) VMAX_temp = adcBuffer[x];
+			  }
+			  if(VMAX_temp > ACSINE_VMIN && VMAX_temp < ACSINE_VMAX){
+				  REG_STATUS |= (1 << 0);
+				  GPIOB->ODR |= (1 << 13); // Acende o LED se o status for 1
+			  }
+			  else {
+				  REG_STATUS &= ~(1 << 0);
+				  GPIOB->ODR &= ~(1 << 13); // Apaga o LED se o status for 0
+				  SW_Time = 5000;
+			  }
+			  VMAX = VMAX_temp;
+			  State_CHECK=BAT_CHK;
+			  HAL_ADC_Stop_DMA(&hadc1);
+			  //ADC1->CR2 &= ~ADC1_CR2_DMA;
+			  CONV_START=1; //Configura o flag para iniciar a conversão do prox estado.
+		  }
+		  break;
+	  case BAT_CHK: // PA7 (VP0 -> 11) - Entrada Bateria
+		  if(CONV_START){
+		  	  CONV_START = 0;
+		  	  OPAMP2->CSR |= (1 << 2);
+		  	  OPAMP2->CSR |= (1 << 3);
+		  	  HAL_ADC_Start(&hadc1);
+		  	  HAL_ADC_PollForConversion(&hadc1, 100); // poll for conversion
+		  	  BATBuffer = HAL_ADC_GetValue(&hadc1); // get the adc value
+		  	  if(BATBuffer > BAT_VMIN) REG_STATUS |= (1 << 1);
+		  	  else REG_STATUS &= ~(1 << 1);
+		  	  State_CHECK = PANEL_CHK;
+		  	  CONV_START = 1;
+		  }
+		  break;
+	  case PANEL_CHK: // PB14 (VP3-> 01) - Entrada Painel
+		  if(CONV_START){
+		      CONV_START = 0;
+		      OPAMP2->CSR &= ~(1 << 3);
+		      OPAMP2->CSR |= (1 << 2);
+		      HAL_ADC_PollForConversion(&hadc1, 100); // poll for conversion
+		      PANELBuffer = HAL_ADC_GetValue(&hadc1); // get the adc value
+		      if(PANELBuffer > PANEL_VMIN) REG_STATUS |= (1 << 2);
+		      else REG_STATUS &= ~(1 << 2);
+		      HAL_ADC_Stop(&hadc1);
+		      State_CHECK = ACSINE_CHK;
+		      CONV_START = 1;
+		  }
+		  break;
 	  }
-	  HAL_UART_Transmit(&huart2, (uint8_t*)uartBuffer, length, HAL_MAX_DELAY);
-	  length = 0;
-	  HAL_Delay(10000);
-	  */
+
+	  switch(State_POWER){
+	  case AC:
+		  // Pino PA10
+		  GPIOB->ODR |= (1 << 3);
+		  GPIOB->ODR |= (1 << 5);
+		  GPIOA->ODR &= ~(1 << 10);
+		  break;
+	  case BAT:
+		  // Pino PB3
+		  GPIOB->ODR |= (1 << 5);
+		  GPIOA->ODR |= (1 << 10);
+		  GPIOB->ODR &= ~(1 << 3);
+		  break;
+	  case PANEL:
+		  // Pino PB5
+		  GPIOB->ODR |= (1 << 3);
+		  GPIOA->ODR |= (1 << 10);
+		  GPIOB->ODR &= ~(1 << 5);
+		  break;
+	  case NC:
+		  GPIOA->ODR |= (1 << 10);
+		  GPIOB->ODR |= (1 << 3);
+		  GPIOB->ODR |= (1 << 5);
+		  break;
+	  }
+	  if(POWER_Control){
+	  switch (State_PRESET) {
+	      case PRESET_1:  // AC > BAT > PANEL > NC
+	          if (AC_AVAILABLE && SW_Time == 0) {
+	              State_POWER = AC;
+	          } else if (BAT_AVAILABLE) {
+	              State_POWER = BAT;
+	          } else if (PANEL_AVAILABLE) {
+	              State_POWER = PANEL;
+	          } else {
+	              State_POWER = NC;  // Nenhuma fonte disponível
+	          }
+	          break;
+
+	      case PRESET_2:  // AC > PANEL > BAT
+	          if (AC_AVAILABLE && SW_Time == 0) {
+	              State_POWER = AC;
+	          } else if (PANEL_AVAILABLE) {
+	              State_POWER = PANEL;
+	          } else if (BAT_AVAILABLE) {
+	              State_POWER = BAT;
+	          } else {
+	              State_POWER = NC;  // Nenhuma fonte disponível
+	          }
+	          break;
+
+	      case PRESET_3:  // BAT > AC > PANEL
+	          if (BAT_AVAILABLE) {
+	              State_POWER = BAT;
+	          } else if (AC_AVAILABLE && SW_Time == 0) {
+	              State_POWER = AC;
+	          } else if (PANEL_AVAILABLE) {
+	              State_POWER = PANEL;
+	          } else {
+	              State_POWER = NC;  // Nenhuma fonte disponível
+	          }
+	          break;
+
+	      case PRESET_4:  // BAT > PANEL > AC
+	          if (BAT_AVAILABLE) {
+	              State_POWER = BAT;
+	          } else if (PANEL_AVAILABLE) {
+	              State_POWER = PANEL;
+	          } else if (AC_AVAILABLE && SW_Time == 0) {
+	              State_POWER = AC;
+	          } else {
+	              State_POWER = NC;  // Nenhuma fonte disponível
+	          }
+	          break;
+
+	      case PRESET_5:  // PANEL > AC > BAT
+	          if (PANEL_AVAILABLE) {
+	              State_POWER = PANEL;
+	          } else if (AC_AVAILABLE && SW_Time == 0) {
+	              State_POWER = AC;
+	          } else if (BAT_AVAILABLE) {
+	              State_POWER = BAT;
+	          } else {
+	              State_POWER = NC;  // Nenhuma fonte disponível
+	          }
+	          break;
+
+	      case PRESET_6:  // PANEL > BAT > AC
+	          if (PANEL_AVAILABLE) {
+	              State_POWER = PANEL;
+	          } else if (BAT_AVAILABLE) {
+	              State_POWER = BAT;
+	          } else if (AC_AVAILABLE && SW_Time == 0) {
+	              State_POWER = AC;
+	          } else {
+	              State_POWER = NC;  // Nenhuma fonte disponível
+	          }
+	          break;
+	  }
+	  }else{
+		  State_POWER=NC;
+	  }
+
+	  switch(State_BUTTON){
+	  case IDLE:
+		  if(READ_BUTTON==0){
+			  BUTTON_Time = 40;
+			  State_BUTTON = DBC;
+		  }
+		  break;
+	  case DBC:
+		  if(BUTTON_Time == 0){
+			  if(READ_BUTTON == 0){
+				  State_BUTTON = PRES;
+				  POWER_Control = !POWER_Control;
+			  }else{
+				  State_BUTTON = IDLE;
+			  }
+		  }
+		  break;
+	  case PRES:
+		  if(READ_BUTTON){
+			  State_BUTTON = IDLE;
+		  }
+		  break;
+	  }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -179,13 +436,12 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
-  RCC_OscInitStruct.HSEState = RCC_HSE_BYPASS;
-  RCC_OscInitStruct.HSEPredivValue = RCC_HSE_PREDIV_DIV1;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL6;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
+  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL12;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();
@@ -244,7 +500,7 @@ static void MX_ADC1_Init(void)
   hadc1.Init.ExternalTrigConv = ADC_EXTERNALTRIGCONV_T1_TRGO;
   hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
   hadc1.Init.NbrOfConversion = 1;
-  hadc1.Init.DMAContinuousRequests = ENABLE;
+  hadc1.Init.DMAContinuousRequests = DISABLE;
   hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
   hadc1.Init.LowPowerAutoWait = DISABLE;
   hadc1.Init.Overrun = ADC_OVR_DATA_OVERWRITTEN;
@@ -349,6 +605,51 @@ static void MX_TIM1_Init(void)
 }
 
 /**
+  * @brief TIM2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM2_Init(void)
+{
+
+  /* USER CODE BEGIN TIM2_Init 0 */
+
+  /* USER CODE END TIM2_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM2_Init 1 */
+
+  /* USER CODE END TIM2_Init 1 */
+  htim2.Instance = TIM2;
+  htim2.Init.Prescaler = 47;
+  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim2.Init.Period = 999;
+  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM2_Init 2 */
+
+  /* USER CODE END TIM2_Init 2 */
+
+}
+
+/**
   * @brief USART2 Initialization Function
   * @param None
   * @retval None
@@ -364,7 +665,7 @@ static void MX_USART2_UART_Init(void)
 
   /* USER CODE END USART2_Init 1 */
   huart2.Instance = USART2;
-  huart2.Init.BaudRate = 230400;
+  huart2.Init.BaudRate = 115200;
   huart2.Init.WordLength = UART_WORDLENGTH_8B;
   huart2.Init.StopBits = UART_STOPBITS_1;
   huart2.Init.Parity = UART_PARITY_NONE;

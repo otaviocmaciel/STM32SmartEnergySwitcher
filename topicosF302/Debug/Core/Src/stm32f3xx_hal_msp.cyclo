@@ -3,7 +3,7 @@ stm32f3xx_hal_msp.c:88:6:HAL_ADC_MspInit	3
 stm32f3xx_hal_msp.c:128:6:HAL_ADC_MspDeInit	2
 stm32f3xx_hal_msp.c:153:6:HAL_OPAMP_MspInit	2
 stm32f3xx_hal_msp.c:191:6:HAL_OPAMP_MspDeInit	2
-stm32f3xx_hal_msp.c:220:6:HAL_TIM_Base_MspInit	2
-stm32f3xx_hal_msp.c:242:6:HAL_TIM_Base_MspDeInit	2
-stm32f3xx_hal_msp.c:264:6:HAL_UART_MspInit	2
-stm32f3xx_hal_msp.c:303:6:HAL_UART_MspDeInit	2
+stm32f3xx_hal_msp.c:220:6:HAL_TIM_Base_MspInit	3
+stm32f3xx_hal_msp.c:256:6:HAL_TIM_Base_MspDeInit	3
+stm32f3xx_hal_msp.c:292:6:HAL_UART_MspInit	2
+stm32f3xx_hal_msp.c:331:6:HAL_UART_MspDeInit	2
